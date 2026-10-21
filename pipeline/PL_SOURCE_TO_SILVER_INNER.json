@@ -432,7 +432,8 @@
 												"folder": {
 													"value": "@activity('Read Table Detail').output.firstRow.source_path",
 													"type": "Expression"
-												}
+												},
+												"container": "source"
 											}
 										}
 									],
