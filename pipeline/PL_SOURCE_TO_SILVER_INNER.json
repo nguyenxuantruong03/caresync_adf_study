@@ -324,7 +324,7 @@
 							"value": "neon_postgres",
 							"activities": [
 								{
-									"name": "Source to Lnading Inqestion",
+									"name": "Source to Landing Inqestion",
 									"type": "Copy",
 									"dependsOn": [],
 									"policy": {
