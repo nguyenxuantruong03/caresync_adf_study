@@ -1,0 +1,12 @@
+{
+	"name": "adf-caresync-study",
+	"properties": {
+		"globalParameters": {
+			"email_receipent": {
+				"type": "string",
+				"value": "nxt159753@gmail.com"
+			}
+		}
+	},
+	"location": "eastus"
+}
