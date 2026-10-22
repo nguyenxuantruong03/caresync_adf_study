@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "Source to Silver Postgre",
+				"name": "Source to Silver Postgres",
 				"type": "ExecutePipeline",
 				"dependsOn": [],
 				"policy": {
@@ -53,7 +53,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Source to Silver Postgre",
+						"activity": "Source to Silver Postgres",
 						"dependencyConditions": [
 							"Succeeded"
 						]
