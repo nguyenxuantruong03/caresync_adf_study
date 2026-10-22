@@ -1198,6 +1198,23 @@
 										],
 										"scriptBlockExecutionTimeout": "02:00:00"
 									}
+								},
+								{
+									"name": "Update pipeline as failed",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Ingest from Source to Silver",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "Inner pipeline failed",
+										"errorCode": "500"
+									}
 								}
 							]
 						}
@@ -1236,7 +1253,7 @@
 			"properties": {
 				"activities": [
 					{
-						"name": "Source to Silver Postgre",
+						"name": "Source to Silver Postgres",
 						"type": "ExecutePipeline",
 						"dependsOn": [],
 						"policy": {
@@ -1286,7 +1303,7 @@
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
-								"activity": "Source to Silver Postgre",
+								"activity": "Source to Silver Postgres",
 								"dependencyConditions": [
 									"Succeeded"
 								]
