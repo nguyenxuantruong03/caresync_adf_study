@@ -177,6 +177,230 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Read All tables status",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select * from ctrl.audit_log WHERE adf_run_id='@{pipeline().parameters.adf_run_id}'",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "AzureSqlTable1",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "Prepare Email body Header",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "body_header",
+							"value": "Ingestion and Transformation process for caresync project has been completed and below in the status"
+						}
+					},
+					{
+						"name": "Prepare Email body Footer",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "body_footer",
+							"value": "For any support, please reach out to truongdeptrai991@gmail.com"
+						}
+					},
+					{
+						"name": "Prepare Email subject",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Check overall failed count",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "email_subject",
+							"value": {
+								"value": "@{pipeline().globalParameters.env} | @{if(greater(activity('Check overall failed count').output.firstRow.count,0), 'FAILED','SUCCESS')} | CARESYNC MASTER RUN",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Check overall failed count",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select count(*) as count from ctrl.audit_log \nWHERE adf_run_id='@{pipeline().parameters.adf_run_id}'\nand status != 'SUCCESS'",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "AzureSqlTable1",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": true
+						}
+					},
+					{
+						"name": "Prepare Logic app body",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Prepare Email subject",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Prepare Email body Footer",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Prepare Email body Header",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Read All tables status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "logic_apps_body",
+							"value": {
+								"value": "{\n    \"subject\": \"@{variables('email_subject')}\",\n    \"email_receipients\": \"@{pipeline().globalParameters.email_receipent}\",\n    \"body_header\": \"@{variables('body_header')}\",\n    \"body_footer\": \"@{variables('body_footer')}\",\n    \"status_table\": @{activity('Read All tables status').output.value}\n}",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Send Email",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Prepare Logic app body",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"url": {
+								"value": "@pipeline().globalParameters.logic_apps_url",
+								"type": "Expression"
+							},
+							"body": {
+								"value": "@variables('logic_apps_body')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"adf_run_id": {
+						"type": "string",
+						"defaultValue": "8904ff88-0b4a-4fd1-9ea8-d6b25180b953"
+					}
+				},
+				"variables": {
+					"body_header": {
+						"type": "String"
+					},
+					"body_footer": {
+						"type": "String"
+					},
+					"email_subject": {
+						"type": "String"
+					},
+					"logic_apps_body": {
+						"type": "String"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/AzureSqlTable1')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/PL_SILVER_TO_GOLD')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -1393,236 +1617,12 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "Read All tables status",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "select * from ctrl.audit_log WHERE adf_run_id='@{pipeline().parameters.adf_run_id}'",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "AzureSqlTable1",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
-						}
-					},
-					{
-						"name": "Prepare Email body Header",
-						"type": "SetVariable",
-						"dependsOn": [],
-						"policy": {
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "body_header",
-							"value": "Ingestion and Transformation process for caresync project has been completed and below in the status"
-						}
-					},
-					{
-						"name": "Prepare Email body Footer",
-						"type": "SetVariable",
-						"dependsOn": [],
-						"policy": {
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "body_footer",
-							"value": "For any support, please reach out to truongdeptrai991@gmail.com"
-						}
-					},
-					{
-						"name": "Prepare Email subject",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "Check overall failed count",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "email_subject",
-							"value": {
-								"value": "@{pipeline().globalParameters.env} | @{if(greater(activity('Check overall failed count').output.firstRow.count,0), 'FAILED','SUCCESS')} | CARESYNC MASTER RUN",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "Check overall failed count",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "select count(*) as count from ctrl.audit_log \nWHERE adf_run_id='@{pipeline().parameters.adf_run_id}'\nand status != 'SUCCESS'",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "AzureSqlTable1",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": true
-						}
-					},
-					{
-						"name": "Prepare Logic app body",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "Prepare Email subject",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							},
-							{
-								"activity": "Prepare Email body Footer",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							},
-							{
-								"activity": "Prepare Email body Header",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							},
-							{
-								"activity": "Read All tables status",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "logic_apps_body",
-							"value": {
-								"value": "{\n    \"subject\": \"@{variables('email_subject')}\",\n    \"email_receipients\": \"@{pipeline().globalParameters.email_receipent}\",\n    \"body_header\": \"@{variables('body_header')}\",\n    \"body_footer\": \"@{variables('body_footer')}\",\n    \"status_table\": @{activity('Read All tables status').output.value}\n}",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "Send Email",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "Prepare Logic app body",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"method": "POST",
-							"headers": {
-								"Content-Type": "application/json"
-							},
-							"url": {
-								"value": "@pipeline().globalParameters.logic_apps_url",
-								"type": "Expression"
-							},
-							"body": {
-								"value": "@variables('logic_apps_body')",
-								"type": "Expression"
-							}
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"parameters": {
-					"adf_run_id": {
-						"type": "string",
-						"defaultValue": "8904ff88-0b4a-4fd1-9ea8-d6b25180b953"
-					}
-				},
-				"variables": {
-					"body_header": {
-						"type": "String"
-					},
-					"body_footer": {
-						"type": "String"
-					},
-					"email_subject": {
-						"type": "String"
-					},
-					"logic_apps_body": {
-						"type": "String"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/AzureSqlTable1')]"
-			]
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/TGN_CARESYNC_DAILY')]",
 			"type": "Microsoft.DataFactory/factories/triggers",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"annotations": [],
-				"runtimeState": "Started",
+				"runtimeState": "Stopped",
 				"pipelines": [
 					{
 						"pipelineReference": {
